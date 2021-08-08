@@ -16,6 +16,11 @@ if (!(discordWebhookUrl || (discordWebhookId !== '' && discordWebhookToken !== '
     throw new Error('You need to specify either Discord Webhook URL or both Discord Webhook ID and token!');
 }
 
+// Ensure stamina threshold has a legal value
+if (config.staminaThreshold < 0 || config.staminaThreshold > 200) {
+    throw new Error('Stamina threshold needs to be between 0 and 200!');
+}
+
 const webhookClient = discordWebhookUrl ? new WebhookClient({url: discordWebhookUrl}) : new WebhookClient({id: discordWebhookId, token: discordWebhookToken});
 const web3 = new Web3(config.blockchainProvider);
 const characterContract = new web3.eth.Contract(characterABI, characterAddress);

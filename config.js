@@ -11,7 +11,7 @@ export default {
     discordWebhookId: process.env.DISCORD_WEBHOOK_ID || '',
     discordWebhookToken: process.env.DISCORD_WEBHOOK_TOKEN || '',
     waitTimeout: process.env.WAIT_TIMEOUT || HOUR_IN_MILLESECONDS,
-    staminaThreshold: process.env.STAMINA_THRESHOLD || 160,
+    staminaThreshold: parseInt(process.env.STAMINA_THRESHOLD, 10) || 160,
     blockchainProvider: process.env.BLOCKCHAIN_PROVIDER || 'https://bsc-dataseed1.binance.org:443',
     addresses: process.env.ADDRESSES,
     accountNames: process.env.ACCOUNT_NAMES

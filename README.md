@@ -20,7 +20,7 @@ $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
 # Providing a Discord Webhook URL and multiple accounts
 $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
     -e ADDRESSES=<first_address>,<second_address> \
-    -e ACCOUNT_NAMES="First, Second"
+    -e ACCOUNT_NAMES="First, Second" \
     knutkirkhorn/cryptoblades-stamina-notifier
 ```
 

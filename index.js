@@ -90,6 +90,7 @@ async function checkAndNotifyStamina(account) {
         // eslint-disable-next-line no-await-in-loop
         const stamina = await characterContract.methods.getStaminaPoints(character.id).call();
 
+        // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
             const embedMessage = new MessageEmbed()
                 .setColor('#74829d')
@@ -100,6 +101,9 @@ async function checkAndNotifyStamina(account) {
                 username: 'CryptoBlades Stamina Notifier',
                 embeds: [embedMessage]
             });
+
+            // Wait for next threshold before checking again
+            checkedAccount.characters[i].nextCheck = getNextCheck(config.staminaThreshold);
         } else {
             const staminaNeeded = config.staminaThreshold - stamina;
             checkedAccount.characters[i].nextCheck = getNextCheck(staminaNeeded);

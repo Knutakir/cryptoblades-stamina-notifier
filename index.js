@@ -95,7 +95,7 @@ async function checkAndNotifyStamina(account) {
         // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
             // Save character that should be notified
-            charactersToNotify.push(i + 1);
+            charactersToNotify.push({index: i + 1, stamina});
 
             // Wait for next threshold before checking again
             checkedAccount.characters[i].nextCheck = getNextCheck(config.staminaThreshold);
@@ -107,11 +107,13 @@ async function checkAndNotifyStamina(account) {
 
     // Send shorter message if only one character reached threshold
     if (charactersToNotify.length === 1) {
-        embedMessage.setDescription(`\`${account.name}\`'s ${ordinal(charactersToNotify[0])} character reached ${config.staminaThreshold} stamina`);
+        embedMessage.setDescription(
+            `\`${account.name}\`'s ${ordinal(charactersToNotify[0].index)} character reached ${config.staminaThreshold} stamina (${charactersToNotify[0].stamina})`
+        );
     } else if (charactersToNotify.length > 1) {
         embedMessage.setTitle(`\`${account.name}\`'s characters reached ${config.staminaThreshold} stamina`);
         const messageDescription = charactersToNotify
-            .map(characterNumber => `• ${ordinal(characterNumber)}`)
+            .map(character => `• ${ordinal(character.index)} (${character.stamina})`)
             .join('\n');
         embedMessage.setDescription(messageDescription);
     }

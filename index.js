@@ -75,6 +75,9 @@ function getNextCheck(staminaNeeded) {
 
 async function checkAndNotifyStamina(account) {
     const checkedAccount = {...account};
+    const embedMessage = new MessageEmbed()
+        .setColor('#74829d');
+    const charactersToNotify = [];
 
     // Check stamina for all accounts characters
     for (let i = 0; i < account.characters.length; i++) {
@@ -91,15 +94,8 @@ async function checkAndNotifyStamina(account) {
 
         // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
-            const embedMessage = new MessageEmbed()
-                .setColor('#74829d')
-                .setDescription(`\`${account.name}\`'s ${ordinal(i + 1)} character reached ${config.staminaThreshold} stamina`);
-
-            // eslint-disable-next-line no-await-in-loop
-            await webhookClient.send({
-                username: 'CryptoBlades Stamina Notifier',
-                embeds: [embedMessage]
-            });
+            // Save character that should be notified
+            charactersToNotify.push(i + 1);
 
             // Wait for next threshold before checking again
             checkedAccount.characters[i].nextCheck = getNextCheck(config.staminaThreshold);
@@ -107,6 +103,25 @@ async function checkAndNotifyStamina(account) {
             const staminaNeeded = config.staminaThreshold - stamina;
             checkedAccount.characters[i].nextCheck = getNextCheck(staminaNeeded);
         }
+    }
+
+    // Send shorter message if only one character reached threshold
+    if (charactersToNotify.length === 1) {
+        embedMessage.setDescription(`\`${account.name}\`'s ${ordinal(charactersToNotify[0])} character reached ${config.staminaThreshold} stamina`);
+    } else if (charactersToNotify.length > 1) {
+        embedMessage.setTitle(`\`${account.name}\`'s characters reached ${config.staminaThreshold} stamina`);
+        const messageDescription = charactersToNotify
+            .map(characterNumber => `• ${ordinal(characterNumber)}`)
+            .join('\n');
+        embedMessage.setDescription(messageDescription);
+    }
+
+    if (charactersToNotify.length !== 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await webhookClient.send({
+            username: 'CryptoBlades Stamina Notifier',
+            embeds: [embedMessage]
+        });
     }
 
     return checkedAccount;

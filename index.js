@@ -1,6 +1,8 @@
 import {MessageEmbed, WebhookClient} from 'discord.js';
 import Web3 from 'web3';
 import ordinal from 'ordinal';
+// eslint-disable-next-line import/no-unresolved
+import {setTimeout} from 'timers/promises';
 import config from './config.js';
 import {
     characterABI,
@@ -26,9 +28,6 @@ const webhookClient = discordWebhookUrl ? new WebhookClient({url: discordWebhook
 const web3 = new Web3(config.blockchainProvider);
 const characterContract = new web3.eth.Contract(characterABI, characterAddress);
 const cryptoBladesContract = new web3.eth.Contract(cryptoBladesABI, cryptoBladesAddress);
-
-// Wait for a specified time (milliseconds)
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function initializeAccounts() {
     // Ensure Binance Smart Chain addresses are provided
@@ -130,7 +129,7 @@ async function checkAndNotifyStamina(account) {
             console.log(error);
         } finally {
             // eslint-disable-next-line no-await-in-loop
-            await wait(config.waitTimeout);
+            await setTimeout(config.waitTimeout);
         }
     }
 })();

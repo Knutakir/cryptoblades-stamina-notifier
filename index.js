@@ -28,6 +28,8 @@ const webhookClient = discordWebhookUrl ? new WebhookClient({url: discordWebhook
 const web3 = new Web3(config.blockchainProvider);
 const characterContract = new web3.eth.Contract(characterABI, characterAddress);
 const cryptoBladesContract = new web3.eth.Contract(cryptoBladesABI, cryptoBladesAddress);
+const discordMessageDescriptionLimit = 4096;
+const webhookUsername = 'CryptoBlades Stamina Notifier';
 
 async function initializeAccounts() {
     // Ensure Binance Smart Chain addresses are provided
@@ -73,8 +75,78 @@ function getNextCheck(staminaNeeded) {
     return new Date(new Date().getTime() + staminaMinutesRegenerationTime * staminaNeeded * 60000);
 }
 
-async function checkAndNotifyStamina(account) {
+function splitCharacterMessageDescriptions(accountStaminas) {
+    const messageDescriptions = [];
+    let messageDescription = '';
+
+    for (let i = 0; i < accountStaminas.length; i++) {
+        if (messageDescription.length + accountStaminas[i].length > discordMessageDescriptionLimit) {
+            messageDescriptions.push(messageDescription);
+            messageDescription = '';
+        }
+
+        messageDescription += `${accountStaminas[i]}\n\n`;
+    }
+
+    if (messageDescription !== '') {
+        messageDescriptions.push(messageDescription);
+    }
+
+    return messageDescriptions;
+}
+
+async function notifyStamina(accounts) {
+    const nonEmptyAccounts = accounts.filter(account => account.charactersToNotify.length > 0);
+
+    if (nonEmptyAccounts.length === 0) {
+        return;
+    }
+
+    const embedMessage = new MessageEmbed()
+        .setColor('#74829d');
+
+    // Send shorter message if only one character reached threshold
+    if (nonEmptyAccounts.length === 1 && nonEmptyAccounts[0].charactersToNotify.length === 1) {
+        const [account] = nonEmptyAccounts;
+        const [character] = account.charactersToNotify;
+        embedMessage.setDescription(
+            `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`
+        );
+
+        await webhookClient.send({
+            username: webhookUsername,
+            embeds: [embedMessage]
+        });
+
+        return;
+    }
+
+    embedMessage.setTitle(`Characters reached ${config.staminaThreshold} stamina`);
+    const accountStaminas = nonEmptyAccounts
+        .map(account => {
+            const startMessage = `\`${account.name}\`\n`;
+            const characterStaminas = account.charactersToNotify
+                .map(character => `• ${ordinal(character.index)} (${character.stamina})`)
+                .join('\n');
+
+            return `${startMessage}${characterStaminas}`;
+        });
+    const messageDescriptions = splitCharacterMessageDescriptions(accountStaminas);
+
+    for (let i = 0; i < messageDescriptions.length; i++) {
+        embedMessage.setDescription(messageDescriptions[i]);
+
+        // eslint-disable-next-line no-await-in-loop
+        await webhookClient.send({
+            username: webhookUsername,
+            embeds: [embedMessage]
+        });
+    }
+}
+
+async function checkStamina(account) {
     const checkedAccount = {...account};
+    const charactersToNotify = [];
 
     // Check stamina for all accounts characters
     for (let i = 0; i < account.characters.length; i++) {
@@ -91,15 +163,8 @@ async function checkAndNotifyStamina(account) {
 
         // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
-            const embedMessage = new MessageEmbed()
-                .setColor('#74829d')
-                .setDescription(`\`${account.name}\`'s ${ordinal(i + 1)} character reached ${config.staminaThreshold} stamina`);
-
-            // eslint-disable-next-line no-await-in-loop
-            await webhookClient.send({
-                username: 'CryptoBlades Stamina Notifier',
-                embeds: [embedMessage]
-            });
+            // Save character that should be notified
+            charactersToNotify.push({index: i + 1, stamina});
 
             // Wait for next threshold before checking again
             checkedAccount.characters[i].nextCheck = getNextCheck(config.staminaThreshold);
@@ -109,7 +174,7 @@ async function checkAndNotifyStamina(account) {
         }
     }
 
-    return checkedAccount;
+    return {checkedAccount, charactersToNotify};
 }
 
 (async () => {
@@ -119,12 +184,18 @@ async function checkAndNotifyStamina(account) {
     while (true) {
         try {
             console.log('Checking for stamina at:', new Date());
+            const notifyingAccounts = [];
 
             for (let i = 0; i < accounts.length; i++) {
                 const account = accounts[i];
                 // eslint-disable-next-line no-await-in-loop
-                accounts[i] = await checkAndNotifyStamina(account);
+                const result = await checkStamina(account);
+                accounts[i] = result.checkedAccount;
+                notifyingAccounts.push({name: account.name, charactersToNotify: result.charactersToNotify});
             }
+
+            // eslint-disable-next-line no-await-in-loop
+            await notifyStamina(notifyingAccounts);
         } catch (error) {
             console.log(error);
         } finally {

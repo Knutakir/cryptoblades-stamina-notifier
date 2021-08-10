@@ -28,6 +28,8 @@ const webhookClient = discordWebhookUrl ? new WebhookClient({url: discordWebhook
 const web3 = new Web3(config.blockchainProvider);
 const characterContract = new web3.eth.Contract(characterABI, characterAddress);
 const cryptoBladesContract = new web3.eth.Contract(cryptoBladesABI, cryptoBladesAddress);
+const discordMessageDescriptionLimit = 4096;
+const webhookUsername = 'CryptoBlades Stamina Notifier';
 
 async function initializeAccounts() {
     // Ensure Binance Smart Chain addresses are provided
@@ -73,6 +75,26 @@ function getNextCheck(staminaNeeded) {
     return new Date(new Date().getTime() + staminaMinutesRegenerationTime * staminaNeeded * 60000);
 }
 
+function splitCharacterMessageDescriptions(accountStaminas) {
+    const messageDescriptions = [];
+    let messageDescription = '';
+
+    for (let i = 0; i < accountStaminas.length; i++) {
+        if (messageDescription.length + accountStaminas[i].length > discordMessageDescriptionLimit) {
+            messageDescriptions.push(messageDescription);
+            messageDescription = '';
+        }
+
+        messageDescription += `${accountStaminas[i]}\n\n`;
+    }
+
+    if (messageDescription !== '') {
+        messageDescriptions.push(messageDescription);
+    }
+
+    return messageDescriptions;
+}
+
 async function notifyStamina(accounts) {
     const nonEmptyAccounts = accounts.filter(account => account.charactersToNotify.length > 0);
 
@@ -92,7 +114,7 @@ async function notifyStamina(accounts) {
         );
 
         await webhookClient.send({
-            username: 'CryptoBlades Stamina Notifier',
+            username: webhookUsername,
             embeds: [embedMessage]
         });
 
@@ -100,7 +122,7 @@ async function notifyStamina(accounts) {
     }
 
     embedMessage.setTitle(`Characters reached ${config.staminaThreshold} stamina`);
-    const messageDescription = nonEmptyAccounts
+    const accountStaminas = nonEmptyAccounts
         .map(account => {
             const startMessage = `\`${account.name}\`\n`;
             const characterStaminas = account.charactersToNotify
@@ -108,14 +130,18 @@ async function notifyStamina(accounts) {
                 .join('\n');
 
             return `${startMessage}${characterStaminas}`;
-        })
-        .join('\n\n');
-    embedMessage.setDescription(messageDescription);
+        });
+    const messageDescriptions = splitCharacterMessageDescriptions(accountStaminas);
 
-    await webhookClient.send({
-        username: 'CryptoBlades Stamina Notifier',
-        embeds: [embedMessage]
-    });
+    for (let i = 0; i < messageDescriptions.length; i++) {
+        embedMessage.setDescription(messageDescriptions[i]);
+
+        // eslint-disable-next-line no-await-in-loop
+        await webhookClient.send({
+            username: webhookUsername,
+            embeds: [embedMessage]
+        });
+    }
 }
 
 async function checkStamina(account) {

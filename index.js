@@ -9,7 +9,7 @@ import {
     characterAddress,
     cryptoBladesABI,
     cryptoBladesAddress,
-    staminaMinutesRegenerationTime
+    staminaMillisecondsRegenerationTime
 } from './constants.js';
 
 const {discordWebhookUrl, discordWebhookId, discordWebhookToken} = config;
@@ -71,8 +71,8 @@ async function initializeAccounts() {
     }));
 }
 
-function getNextCheck(staminaNeeded) {
-    return new Date(new Date().getTime() + staminaMinutesRegenerationTime * staminaNeeded * 60000);
+function getDateFromNeededStamina(staminaNeeded) {
+    return new Date(new Date().getTime() + staminaMillisecondsRegenerationTime * staminaNeeded);
 }
 
 function splitCharacterMessageDescriptions(accountStaminas) {
@@ -95,6 +95,11 @@ function splitCharacterMessageDescriptions(accountStaminas) {
     return messageDescriptions;
 }
 
+function createDynamicDiscordTimestamp(date) {
+    const unixTime = Math.round(date.getTime() / 1000);
+    return `<t:${unixTime}:R>`;
+}
+
 async function notifyStamina(accounts) {
     const nonEmptyAccounts = accounts.filter(account => account.charactersToNotify.length > 0);
 
@@ -109,9 +114,18 @@ async function notifyStamina(accounts) {
     if (nonEmptyAccounts.length === 1 && nonEmptyAccounts[0].charactersToNotify.length === 1) {
         const [account] = nonEmptyAccounts;
         const [character] = account.charactersToNotify;
-        embedMessage.setDescription(
-            `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`
-        );
+
+        // Check if stamina has already been reached
+        if (!character.thresholdReachedAt) {
+            embedMessage.setDescription(
+                `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`
+            );
+        } else {
+            const dynamicTimestamp = createDynamicDiscordTimestamp(character.thresholdReachedAt);
+            embedMessage.setDescription(
+                `\`${account.name}\`'s ${ordinal(character.index)} character reaches ${config.staminaThreshold} stamina (${character.stamina}) - ${dynamicTimestamp}`
+            );
+        }
 
         await webhookClient.send({
             username: webhookUsername,
@@ -126,7 +140,13 @@ async function notifyStamina(accounts) {
         .map(account => {
             const startMessage = `\`${account.name}\`\n`;
             const characterStaminas = account.charactersToNotify
-                .map(character => `• ${ordinal(character.index)} (${character.stamina})`)
+                .map(character => {
+                    if (!character.thresholdReachedAt) {
+                        return `• ${ordinal(character.index)} (${character.stamina})`;
+                    }
+
+                    return `• ${ordinal(character.index)} (${character.stamina}) - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}`;
+                })
                 .join('\n');
 
             return `${startMessage}${characterStaminas}`;
@@ -159,7 +179,11 @@ async function checkStamina(account) {
         }
 
         // eslint-disable-next-line no-await-in-loop
-        const stamina = await characterContract.methods.getStaminaPoints(character.id).call();
+        const stamina = parseInt(await characterContract.methods.getStaminaPoints(character.id).call(), 10);
+
+        const startNextHour = new Date();
+        startNextHour.setHours(new Date().getHours() + 1, 0, 0, 0);
+        const remainingStaminaGainCurrentHour = Math.floor((startNextHour.getTime() - new Date().getTime()) / staminaMillisecondsRegenerationTime);
 
         // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
@@ -167,10 +191,20 @@ async function checkStamina(account) {
             charactersToNotify.push({index: i + 1, stamina});
 
             // Wait for next threshold before checking again
-            checkedAccount.characters[i].nextCheck = getNextCheck(config.staminaThreshold);
+            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+        } else if (stamina + remainingStaminaGainCurrentHour >= config.staminaThreshold) {
+            // If stamina threshold will be reached current hour => notify
+            const remainingStamina = config.staminaThreshold - stamina;
+            const thresholdReachedAt = getDateFromNeededStamina(remainingStamina);
+
+            // Wait for next threshold and time until threshold before checking again
+            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+
+            // Save character that should be notified
+            charactersToNotify.push({index: i + 1, stamina, thresholdReachedAt});
         } else {
             const staminaNeeded = config.staminaThreshold - stamina;
-            checkedAccount.characters[i].nextCheck = getNextCheck(staminaNeeded);
+            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(staminaNeeded);
         }
     }
 

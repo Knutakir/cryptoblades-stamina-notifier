@@ -72,8 +72,9 @@ Provide these with the docker run command or store these in a `.env` file.
     - Default: `https://bsc-dataseed1.binance.org:443`
 - `ADDRESSES`
     - The blockchain address(es) used for checking character staminas.
-- `ACCOUNT_NAMES`
+- `ACCOUNT_NAMES` ***(optional)***
     - Names for the account(s) used for better knowing for which account the stamina threshold was reached. This can be anything and are just used in the Discord message.
+    - If not provided it will create `1st`, `2nd`, `3rd` etc. for the length of provided addresses. 
 
 ## License
 MIT © [Knut Kirkhorn](https://github.com/Knutakir/cryptoblades-stamina-notifier/blob/main/LICENSE)

@@ -37,11 +37,6 @@ async function initializeAccounts() {
         throw new Error('You need to specify an address!');
     }
 
-    // Ensure account names are provided
-    if (!config.accountNames) {
-        throw new Error('You need to specify an account name!');
-    }
-
     const addresses = config.addresses.split(',').map(address => address.trim()).filter(address => address !== '');
 
     // Ensure all addresses are valid
@@ -53,7 +48,16 @@ async function initializeAccounts() {
         }
     }
 
-    const accountNames = config.accountNames.split(',').map(accountName => accountName.trim()).filter(accountName => accountName !== '');
+    let accountNames = [];
+
+    // Use provided account names or create `1st`, `2nd`, `3rd`...
+    if (config.accountNames) {
+        accountNames = config.accountNames.split(',').map(accountName => accountName.trim()).filter(accountName => accountName !== '');
+    } else {
+        for (let i = 0; i < addresses.length; i++) {
+            accountNames.push(ordinal(i + 1));
+        }
+    }
 
     if (addresses.length !== accountNames.length) {
         throw new Error('Length of addresses and account names needs to match!');

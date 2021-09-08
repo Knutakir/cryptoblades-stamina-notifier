@@ -9,7 +9,9 @@ import {
     characterAddress,
     cryptoBladesABI,
     cryptoBladesAddress,
-    staminaMillisecondsRegenerationTime
+    staminaMillisecondsRegenerationTime,
+    weaponABI,
+    weaponAddress
 } from './constants.js';
 
 const {discordWebhookUrl, discordWebhookId, discordWebhookToken} = config;
@@ -28,6 +30,7 @@ const webhookClient = discordWebhookUrl ? new WebhookClient({url: discordWebhook
 const web3 = new Web3(config.blockchainProvider);
 const characterContract = new web3.eth.Contract(characterABI, characterAddress);
 const cryptoBladesContract = new web3.eth.Contract(cryptoBladesABI, cryptoBladesAddress);
+const weaponContract = new web3.eth.Contract(weaponABI, weaponAddress);
 const discordMessageDescriptionLimit = 4096;
 const webhookUsername = 'CryptoBlades Stamina Notifier';
 
@@ -63,14 +66,30 @@ async function initializeAccounts() {
         throw new Error('Length of addresses and account names needs to match!');
     }
 
+    const weaponIds = config.weaponIds && config.weaponIds.split(',').map(address => address.trim()).filter(address => address !== '');
+
+    if (config.weaponIds && addresses.length !== weaponIds.length) {
+        throw new Error('Length of addresses and weapon IDs needs to match!');
+    }
+
     return Promise.all(addresses.map(async (address, i) => {
         const characterIds = await cryptoBladesContract.methods.getMyCharacters().call({from: address});
         const characters = characterIds.map(characterId => ({id: characterId}));
 
+        if (weaponIds) {
+            const weapons = await cryptoBladesContract.methods.getMyWeapons().call({from: address});
+            const weaponId = weaponIds[i];
+
+            if (!weapons.includes(weaponId)) {
+                throw new Error(`Account \`${accountNames[i]}\` does not own weapon ID \`${weaponId}\`!`);
+            }
+        }
+
         return {
             address,
             name: accountNames[i],
-            characters
+            characters,
+            ...(weaponIds && {weaponId: weaponIds[i]})
         };
     }));
 }
@@ -104,6 +123,32 @@ function createDynamicDiscordTimestamp(date) {
     return `<t:${unixTime}:R>`;
 }
 
+function getDiscordEmojiFromTrait(trait) {
+    switch (trait) {
+        case 0:
+            // Fire
+            return ':fire:';
+        case 1:
+            // Earth
+            return ':evergreen_tree:';
+        case 2:
+            // Lightning
+            return ':zap:';
+        case 3:
+            // Water
+            return ':droplet:';
+        default:
+            return ':question:';
+    }
+}
+
+function createEnemyMessagePart(enemy) {
+    const {
+        winPercentage, trait, index, power
+    } = enemy;
+    return ` - ${winPercentage}% - ${getDiscordEmojiFromTrait(trait)} ${ordinal(index)} (${power})`;
+}
+
 async function notifyStamina(accounts) {
     const nonEmptyAccounts = accounts.filter(account => account.charactersToNotify.length > 0);
 
@@ -119,17 +164,19 @@ async function notifyStamina(accounts) {
         const [account] = nonEmptyAccounts;
         const [character] = account.charactersToNotify;
 
+        let baseMessage;
+
         // Check if stamina has already been reached
         if (!character.thresholdReachedAt) {
-            embedMessage.setDescription(
-                `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`
-            );
+            baseMessage = `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`;
         } else {
             const dynamicTimestamp = createDynamicDiscordTimestamp(character.thresholdReachedAt);
-            embedMessage.setDescription(
-                `\`${account.name}\`'s ${ordinal(character.index)} character reaches ${config.staminaThreshold} stamina (${character.stamina}) - ${dynamicTimestamp}`
-            );
+            baseMessage = `\`${account.name}\`'s ${ordinal(character.index)} character reaches ${config.staminaThreshold} stamina (${character.stamina}) - ${dynamicTimestamp}`;
         }
+
+        embedMessage.setDescription(
+            `${baseMessage}${config.weaponIds && createEnemyMessagePart(character.enemy)}`
+        );
 
         await webhookClient.send({
             username: webhookUsername,
@@ -145,11 +192,13 @@ async function notifyStamina(accounts) {
             const startMessage = `\`${account.name}\`\n`;
             const characterStaminas = account.charactersToNotify
                 .map(character => {
+                    const baseMessage = `• ${ordinal(character.index)} (${character.stamina})`;
+
                     if (!character.thresholdReachedAt) {
-                        return `• ${ordinal(character.index)} (${character.stamina})`;
+                        return `${baseMessage}${config.weaponIds && createEnemyMessagePart(character.enemy)}`;
                     }
 
-                    return `• ${ordinal(character.index)} (${character.stamina}) - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}`;
+                    return `${baseMessage} - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}${config.weaponIds && createEnemyMessagePart(character.enemy)}`;
                 })
                 .join('\n');
 
@@ -166,6 +215,163 @@ async function notifyStamina(accounts) {
             embeds: [embedMessage]
         });
     }
+}
+
+async function fetchEnemies(characterId, weaponId) {
+    const enemies = await cryptoBladesContract.methods.getTargets(characterId, weaponId).call();
+    return enemies.map(enemy => {
+        const parsedData = parseInt(enemy, 10);
+
+        return {
+            // eslint-disable-next-line no-bitwise
+            power: parsedData & 0b11111111_11111111_11111111,
+            // eslint-disable-next-line no-bitwise
+            trait: parsedData >> 24
+        };
+    });
+}
+
+function calculateCharacterPower(level) {
+    return (1000 + 10 * level) * (Math.floor(level / 10) + 1);
+}
+
+const numberOfTraits = 4;
+
+function getTraitEffectiveness(firstTrait, secondTrait) {
+    if ((firstTrait + 1) % numberOfTraits === secondTrait) {
+        return 1;
+    }
+
+    if ((secondTrait + 1) % numberOfTraits === firstTrait) {
+        return -1;
+    }
+
+    return 0;
+}
+
+function calculateTraitBonus(characterTrait, weaponTrait, enemyTrait) {
+    let traitBonus = 1;
+
+    if (characterTrait === weaponTrait) {
+        traitBonus += 0.075;
+    }
+
+    traitBonus += 0.075 * getTraitEffectiveness(characterTrait, enemyTrait);
+
+    return traitBonus;
+}
+
+function calculateFightWinPercentage(characterPower, characterTrait, weaponTrait, enemy) {
+    const traitBonus = calculateTraitBonus(characterTrait, weaponTrait, enemy.trait);
+    const minCharacterRoll = Math.floor(characterPower * traitBonus * 0.9);
+    const maxCharacterRoll = Math.floor(characterPower * traitBonus * 1.1);
+    const minEnemyRoll = Math.floor(enemy.power * 0.9);
+    const maxEnemyRoll = Math.floor(enemy.power * 1.1);
+
+    // TODO: currently using same method as cbtracker for calculating win percentage
+    // TODO: find a way of doing this without nested loops
+    let winRolls = 0;
+    let loseRolls = 0;
+
+    for (let characterRoll = minCharacterRoll; characterRoll <= maxCharacterRoll; characterRoll++) {
+        for (let enemyRoll = minEnemyRoll; enemyRoll <= maxEnemyRoll; enemyRoll++) {
+            if (characterRoll >= enemyRoll) {
+                winRolls++;
+            } else {
+                loseRolls++;
+            }
+        }
+    }
+
+    const winPercentage = (winRolls / (winRolls + loseRolls)) * 100;
+
+    // Only show two decimal places
+    return Math.floor(winPercentage * 100) / 100;
+}
+
+async function fetchCharacter(characterId) {
+    const {1: level, 2: trait} = await characterContract.methods.get(characterId).call();
+    return {
+        level: parseInt(level, 10),
+        trait: parseInt(trait, 10)
+    };
+}
+
+function getWeaponStatTypes(weaponProperties) {
+    // eslint-disable-next-line no-bitwise
+    const pattern = (weaponProperties >> 5) & 0x7f;
+    return [
+        pattern % 5,
+        Math.floor(pattern / 5) % 5,
+        Math.floor(Math.floor(pattern / 5) / 5) % 5
+    ];
+}
+
+const powerTrait = 4;
+
+function calculateWeaponStat(type, value, characterTrait) {
+    let statValue = value;
+
+    if (type !== characterTrait) {
+        statValue *= 0.0025;
+    } else if (type === characterTrait) {
+        statValue *= 0.002675;
+    }
+
+    if (type === powerTrait) {
+        statValue *= 0.002575;
+    }
+
+    return statValue;
+}
+
+function calculateTotalWeaponStats(stats, properties, characterTrait) {
+    const statTypes = getWeaponStatTypes(properties);
+    return statTypes
+        .map((statType, i) => calculateWeaponStat(statType, stats[i], characterTrait))
+        .reduce((previous, current) => previous + current, 0);
+}
+
+async function fetchWeapon(weaponId, characterTrait) {
+    const {
+        _properties,
+        _stat1: stat1,
+        _stat2: stat2,
+        _stat3: stat3,
+        _bonusPower
+    } = await weaponContract.methods.get(weaponId).call();
+    const bonusPower = parseInt(_bonusPower, 10);
+    const properties = parseInt(_properties, 10);
+
+    // eslint-disable-next-line no-bitwise
+    const trait = (properties >> 3) & 0x3;
+
+    const stats = [stat1, stat2, stat3].map(stat => parseInt(stat, 10));
+    const totalStats = calculateTotalWeaponStats(stats, properties, characterTrait);
+
+    return {
+        trait,
+        bonusPower,
+        totalStats
+    };
+}
+
+async function calculateHighestFightWinPercentage(characterId, weaponId) {
+    const enemies = await fetchEnemies(characterId, weaponId);
+    const character = await fetchCharacter(characterId);
+    const characterPower = calculateCharacterPower(character.level);
+    const weapon = await fetchWeapon(weaponId, character.trait);
+    const alignedCharacterPower = ((weapon.totalStats + 1) * characterPower) + weapon.bonusPower;
+    const enemiesWithWinFightPercentages = enemies.map((enemy, i) => ({...enemy, index: i + 1, winPercentage: calculateFightWinPercentage(alignedCharacterPower, character.trait, weapon.trait, enemy)}));
+    let highestPercentageEnemy;
+
+    for (let i = 0; i < enemiesWithWinFightPercentages.length; i++) {
+        if (!highestPercentageEnemy || enemiesWithWinFightPercentages[i].winPercentage > highestPercentageEnemy.winPercentage) {
+            highestPercentageEnemy = enemiesWithWinFightPercentages[i];
+        }
+    }
+
+    return highestPercentageEnemy;
 }
 
 async function checkStamina(account) {
@@ -191,21 +397,54 @@ async function checkStamina(account) {
 
         // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
-            // Save character that should be notified
-            charactersToNotify.push({index: i + 1, stamina});
+            const characterToNotify = {index: i + 1, stamina};
 
-            // Wait for next threshold before checking again
-            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+            // Check if fight percentage should be checked
+            if (config.weaponIds) {
+                // eslint-disable-next-line no-await-in-loop
+                const enemy = await calculateHighestFightWinPercentage(character.id, account.weaponId);
+
+                if (enemy.winPercentage >= config.winPercentageThreshold) {
+                    // Wait for next threshold before checking again
+                    checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+                    characterToNotify.enemy = enemy;
+                } else {
+                    // eslint-disable-next-line no-continue
+                    continue;
+                }
+            } else {
+                // Wait for next threshold before checking again
+                checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+            }
+
+            // Save character that should be notified
+            charactersToNotify.push(characterToNotify);
         } else if (stamina + remainingStaminaGainCurrentHour >= config.staminaThreshold) {
             // If stamina threshold will be reached current hour => notify
             const remainingStamina = config.staminaThreshold - stamina;
             const thresholdReachedAt = getDateFromNeededStamina(remainingStamina);
+            const characterToNotify = {index: i + 1, stamina, thresholdReachedAt};
 
-            // Wait for next threshold and time until threshold before checking again
-            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+            // Check if fight percentage should be checked
+            if (config.weaponIds) {
+                // eslint-disable-next-line no-await-in-loop
+                const enemy = await calculateHighestFightWinPercentage(character.id, account.weaponId);
+
+                if (enemy.winPercentage >= config.winPercentageThreshold) {
+                    // Wait for next threshold and time until threshold before checking again
+                    checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+                    characterToNotify.enemy = enemy;
+                } else {
+                    // eslint-disable-next-line no-continue
+                    continue;
+                }
+            } else {
+                // Wait for next threshold and time until threshold before checking again
+                checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+            }
 
             // Save character that should be notified
-            charactersToNotify.push({index: i + 1, stamina, thresholdReachedAt});
+            charactersToNotify.push(characterToNotify);
         } else {
             const staminaNeeded = config.staminaThreshold - stamina;
             checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(staminaNeeded);

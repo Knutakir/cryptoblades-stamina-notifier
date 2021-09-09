@@ -24,7 +24,12 @@ export async function getAccountCharacters(address) {
 }
 
 export async function getAccountWeapons(address) {
-    return cryptoBladesContract.methods.getMyWeapons().call({from: address});
+    const numberOfWeapons = parseInt(await weaponContract.methods.balanceOf(address).call(), 10);
+    const weapons = await Promise.all(
+        [...Array(numberOfWeapons).keys()]
+            .map((_, i) => weaponContract.methods.tokenOfOwnerByIndex(address, i).call())
+    );
+    return weapons;
 }
 
 export async function getCharacterStamina(characterId) {

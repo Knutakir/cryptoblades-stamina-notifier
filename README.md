@@ -74,7 +74,15 @@ Provide these with the docker run command or store these in a `.env` file.
     - The blockchain address(es) used for checking character staminas.
 - `ACCOUNT_NAMES` ***(optional)***
     - Names for the account(s) used for better knowing for which account the stamina threshold was reached. This can be anything and are just used in the Discord message.
-    - If not provided it will create `1st`, `2nd`, `3rd` etc. for the length of provided addresses. 
+    - Needs to be in the same order as the addresses.
+    - If not provided it will create `1st`, `2nd`, `3rd` etc. for the length of provided addresses.
+- `WIN_PERCENTAGE_THRESHOLD` ***(optional)***
+    - A threshold for calculated fight win percentages. Notifies if percentage is above given threshold.
+    - This is only used if `WEAPON_IDS` are provided.
+    - Default: `98`
+- `WEAPON_IDS` ***(optional)***
+    - IDs for the weapons used for calculating win percentages for the different opponents.
+    - Needs to be in the same order as the addresses.
 
 ## License
 MIT © [Knut Kirkhorn](https://github.com/Knutakir/cryptoblades-stamina-notifier/blob/main/LICENSE)

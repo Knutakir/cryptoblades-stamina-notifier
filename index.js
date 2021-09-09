@@ -5,12 +5,12 @@ import ordinal from 'ordinal';
 import {setTimeout} from 'timers/promises';
 import config from './config.js';
 import {
-    characterABI,
-    characterAddress,
-    cryptoBladesABI,
-    cryptoBladesAddress,
-    staminaMillisecondsRegenerationTime
-} from './constants.js';
+    calculateHighestFightWinPercentage,
+    getAccountCharacters,
+    getAccountWeapons,
+    getCharacterStamina
+} from './cryptoblades.js';
+import {staminaMillisecondsRegenerationTime} from './constants.js';
 
 const {discordWebhookUrl, discordWebhookId, discordWebhookToken} = config;
 
@@ -26,8 +26,6 @@ if (config.staminaThreshold < 0 || config.staminaThreshold > 200) {
 
 const webhookClient = discordWebhookUrl ? new WebhookClient({url: discordWebhookUrl}) : new WebhookClient({id: discordWebhookId, token: discordWebhookToken});
 const web3 = new Web3(config.blockchainProvider);
-const characterContract = new web3.eth.Contract(characterABI, characterAddress);
-const cryptoBladesContract = new web3.eth.Contract(cryptoBladesABI, cryptoBladesAddress);
 const discordMessageDescriptionLimit = 4096;
 const webhookUsername = 'CryptoBlades Stamina Notifier';
 
@@ -63,14 +61,30 @@ async function initializeAccounts() {
         throw new Error('Length of addresses and account names needs to match!');
     }
 
+    const weaponIds = config.weaponIds && config.weaponIds.split(',').map(address => address.trim()).filter(address => address !== '');
+
+    if (config.weaponIds && addresses.length !== weaponIds.length) {
+        throw new Error('Length of addresses and weapon IDs needs to match!');
+    }
+
     return Promise.all(addresses.map(async (address, i) => {
-        const characterIds = await cryptoBladesContract.methods.getMyCharacters().call({from: address});
+        const characterIds = await getAccountCharacters(address);
         const characters = characterIds.map(characterId => ({id: characterId}));
+
+        if (weaponIds) {
+            const weapons = await getAccountWeapons(address);
+            const weaponId = weaponIds[i];
+
+            if (!weapons.includes(weaponId)) {
+                throw new Error(`Account \`${accountNames[i]}\` does not own weapon ID \`${weaponId}\`!`);
+            }
+        }
 
         return {
             address,
             name: accountNames[i],
-            characters
+            characters,
+            ...(weaponIds && {weaponId: weaponIds[i]})
         };
     }));
 }
@@ -104,6 +118,32 @@ function createDynamicDiscordTimestamp(date) {
     return `<t:${unixTime}:R>`;
 }
 
+function getDiscordEmojiFromTrait(trait) {
+    switch (trait) {
+        case 0:
+            // Fire
+            return ':fire:';
+        case 1:
+            // Earth
+            return ':evergreen_tree:';
+        case 2:
+            // Lightning
+            return ':zap:';
+        case 3:
+            // Water
+            return ':droplet:';
+        default:
+            return ':question:';
+    }
+}
+
+function createEnemyMessagePart(enemy) {
+    const {
+        winPercentage, trait, index, power
+    } = enemy;
+    return ` - ${winPercentage}% - ${getDiscordEmojiFromTrait(trait)} ${ordinal(index)} (${power})`;
+}
+
 async function notifyStamina(accounts) {
     const nonEmptyAccounts = accounts.filter(account => account.charactersToNotify.length > 0);
 
@@ -119,17 +159,19 @@ async function notifyStamina(accounts) {
         const [account] = nonEmptyAccounts;
         const [character] = account.charactersToNotify;
 
+        let baseMessage;
+
         // Check if stamina has already been reached
         if (!character.thresholdReachedAt) {
-            embedMessage.setDescription(
-                `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`
-            );
+            baseMessage = `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`;
         } else {
             const dynamicTimestamp = createDynamicDiscordTimestamp(character.thresholdReachedAt);
-            embedMessage.setDescription(
-                `\`${account.name}\`'s ${ordinal(character.index)} character reaches ${config.staminaThreshold} stamina (${character.stamina}) - ${dynamicTimestamp}`
-            );
+            baseMessage = `\`${account.name}\`'s ${ordinal(character.index)} character reaches ${config.staminaThreshold} stamina (${character.stamina}) - ${dynamicTimestamp}`;
         }
+
+        embedMessage.setDescription(
+            `${baseMessage}${config.weaponIds && createEnemyMessagePart(character.enemy)}`
+        );
 
         await webhookClient.send({
             username: webhookUsername,
@@ -145,11 +187,13 @@ async function notifyStamina(accounts) {
             const startMessage = `\`${account.name}\`\n`;
             const characterStaminas = account.charactersToNotify
                 .map(character => {
+                    const baseMessage = `• ${ordinal(character.index)} (${character.stamina})`;
+
                     if (!character.thresholdReachedAt) {
-                        return `• ${ordinal(character.index)} (${character.stamina})`;
+                        return `${baseMessage}${config.weaponIds && createEnemyMessagePart(character.enemy)}`;
                     }
 
-                    return `• ${ordinal(character.index)} (${character.stamina}) - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}`;
+                    return `${baseMessage} - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}${config.weaponIds && createEnemyMessagePart(character.enemy)}`;
                 })
                 .join('\n');
 
@@ -183,7 +227,7 @@ async function checkStamina(account) {
         }
 
         // eslint-disable-next-line no-await-in-loop
-        const stamina = parseInt(await characterContract.methods.getStaminaPoints(character.id).call(), 10);
+        const stamina = await getCharacterStamina(character.id);
 
         const startNextHour = new Date();
         startNextHour.setHours(new Date().getHours() + 1, 0, 0, 0);
@@ -191,21 +235,54 @@ async function checkStamina(account) {
 
         // If stamina threshold has been reached => notify
         if (stamina >= config.staminaThreshold) {
-            // Save character that should be notified
-            charactersToNotify.push({index: i + 1, stamina});
+            const characterToNotify = {index: i + 1, stamina};
 
-            // Wait for next threshold before checking again
-            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+            // Check if fight percentage should be checked
+            if (config.weaponIds) {
+                // eslint-disable-next-line no-await-in-loop
+                const enemy = await calculateHighestFightWinPercentage(character.id, account.weaponId);
+
+                if (enemy.winPercentage >= config.winPercentageThreshold) {
+                    // Wait for next threshold before checking again
+                    checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+                    characterToNotify.enemy = enemy;
+                } else {
+                    // eslint-disable-next-line no-continue
+                    continue;
+                }
+            } else {
+                // Wait for next threshold before checking again
+                checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(config.staminaThreshold);
+            }
+
+            // Save character that should be notified
+            charactersToNotify.push(characterToNotify);
         } else if (stamina + remainingStaminaGainCurrentHour >= config.staminaThreshold) {
             // If stamina threshold will be reached current hour => notify
             const remainingStamina = config.staminaThreshold - stamina;
             const thresholdReachedAt = getDateFromNeededStamina(remainingStamina);
+            const characterToNotify = {index: i + 1, stamina, thresholdReachedAt};
 
-            // Wait for next threshold and time until threshold before checking again
-            checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+            // Check if fight percentage should be checked
+            if (config.weaponIds) {
+                // eslint-disable-next-line no-await-in-loop
+                const enemy = await calculateHighestFightWinPercentage(character.id, account.weaponId);
+
+                if (enemy.winPercentage >= config.winPercentageThreshold) {
+                    // Wait for next threshold and time until threshold before checking again
+                    checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+                    characterToNotify.enemy = enemy;
+                } else {
+                    // eslint-disable-next-line no-continue
+                    continue;
+                }
+            } else {
+                // Wait for next threshold and time until threshold before checking again
+                checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(remainingStamina + config.staminaThreshold);
+            }
 
             // Save character that should be notified
-            charactersToNotify.push({index: i + 1, stamina, thresholdReachedAt});
+            charactersToNotify.push(characterToNotify);
         } else {
             const staminaNeeded = config.staminaThreshold - stamina;
             checkedAccount.characters[i].nextCheck = getDateFromNeededStamina(staminaNeeded);

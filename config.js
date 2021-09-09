@@ -14,5 +14,7 @@ export default {
     staminaThreshold: parseInt(process.env.STAMINA_THRESHOLD, 10) || 160,
     blockchainProvider: process.env.BLOCKCHAIN_PROVIDER || 'https://bsc-dataseed1.binance.org:443',
     addresses: process.env.ADDRESSES,
-    accountNames: process.env.ACCOUNT_NAMES
+    accountNames: process.env.ACCOUNT_NAMES,
+    winPercentageThreshold: parseFloat(process.env.WIN_PERCENTAGE_THRESHOLD) || 98,
+    weaponIds: process.env.WEAPON_IDS
 };

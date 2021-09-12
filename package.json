@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Knutakir/cryptoblades-stamina-notifier.git"
+    "url": "git+https://github.com/knutkirkhorn/cryptoblades-stamina-notifier.git"
   },
   "keywords": [
     "notifier",
@@ -26,9 +26,9 @@
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Knutakir/cryptoblades-stamina-notifier/issues"
+    "url": "https://github.com/knutkirkhorn/cryptoblades-stamina-notifier/issues"
   },
-  "homepage": "https://github.com/Knutakir/cryptoblades-stamina-notifier#readme",
+  "homepage": "https://github.com/knutkirkhorn/cryptoblades-stamina-notifier#readme",
   "dependencies": {
     "discord.js": "^13.0.1",
     "dotenv": "^10.0.0",

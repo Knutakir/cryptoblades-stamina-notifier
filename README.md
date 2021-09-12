@@ -6,7 +6,7 @@
 Notifies on Discord if stamina thresholds are reached for given [CryptoBlades](https://www.cryptoblades.io) characters. Fetches stamina and character information from smart contracts on the [Binance Smart Chain](https://www.binance.org/en/smartChain). It notifies to a Discord channel using [Discord Webhooks](https://discord.com/developers/docs/resources/webhook).
 
 <div align="center">
-	<img src="https://raw.githubusercontent.com/Knutakir/cryptoblades-stamina-notifier/main/media/top-image.png" alt="CryptoBlades stamina notification example">
+	<img src="https://raw.githubusercontent.com/knutkirkhorn/cryptoblades-stamina-notifier/main/media/top-image.png" alt="CryptoBlades stamina notification example">
 </div>
 
 ## Usage
@@ -89,4 +89,4 @@ Provide these with the docker run command or store these in a `.env` file.
     - Needs to be in the same order as the addresses.
 
 ## License
-MIT © [Knut Kirkhorn](https://github.com/Knutakir/cryptoblades-stamina-notifier/blob/main/LICENSE)
+MIT © [Knut Kirkhorn](https://github.com/knutkirkhorn/cryptoblades-stamina-notifier/blob/main/LICENSE)

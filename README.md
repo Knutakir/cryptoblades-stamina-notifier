@@ -33,13 +33,13 @@ $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
 # Build container from source
 $ docker build -t cryptoblades-stamina-notifier .
 
-# Providing a single show
+# Providing a single account
 $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
     -e ADDRESSES=<single_address> \
     -e ACCOUNT_NAMES="Main" \
     cryptoblades-stamina-notifier
 
-# Providing multiple shows
+# Providing multiple accounts
 $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
     -e ADDRESSES=<first_address>,<second_address> \
     -e ACCOUNT_NAMES="First, Second" \

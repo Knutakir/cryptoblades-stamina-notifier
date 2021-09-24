@@ -1,3 +1,5 @@
+import config from './config.js';
+
 export const characterABI = [
     {
         inputs: [
@@ -268,8 +270,21 @@ export const weaponABI = [
     }
 ];
 
-export const characterAddress = '0xc6f252c2CdD4087e30608A35c022ce490B58179b';
-export const cryptoBladesAddress = '0x39Bea96e13453Ed52A734B6ACEeD4c41F57B2271';
-export const weaponAddress = '0x7E091b0a220356B157131c831258A9C98aC8031A';
+export const chains = {
+    bsc: {
+        characterAddress: '0xc6f252c2CdD4087e30608A35c022ce490B58179b',
+        cryptoBladesAddress: '0x39Bea96e13453Ed52A734B6ACEeD4c41F57B2271',
+        weaponAddress: '0x7E091b0a220356B157131c831258A9C98aC8031A'
+    },
+    heco: {
+        characterAddress: '0xF6092CDEaabd02069cB56E2b770367AAcf49dfba',
+        cryptoBladesAddress: '0x29869EDb088466a49f75654d8F04edd16Bf60e75',
+        weaponAddress: '0xa0f254436E43239D2B3947A9D590C495738B6A4C'
+    }
+};
+
+export const {characterAddress} = chains[config.network];
+export const {cryptoBladesAddress} = chains[config.network];
+export const {weaponAddress} = chains[config.network];
 
 export const staminaMillisecondsRegenerationTime = 5 * 60000;

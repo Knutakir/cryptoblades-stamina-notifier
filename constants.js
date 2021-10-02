@@ -280,6 +280,11 @@ export const chains = {
         characterAddress: '0xF6092CDEaabd02069cB56E2b770367AAcf49dfba',
         cryptoBladesAddress: '0x29869EDb088466a49f75654d8F04edd16Bf60e75',
         weaponAddress: '0xa0f254436E43239D2B3947A9D590C495738B6A4C'
+    },
+    okex: {
+        characterAddress: '0x6A1d1803d4EDF5CF27EDb64ae95A22F81707eA38',
+        cryptoBladesAddress: '0x98145a2fEBac238280bbdEDc2757dC162318b16e',
+        weaponAddress: '0x364759180A6484e57ECD73C042264A6Da75770e8'
     }
 };
 

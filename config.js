@@ -12,6 +12,9 @@ const chains = {
     },
     heco: {
         blockchainProvider: 'https://http-mainnet.hecochain.com'
+    },
+    okex: {
+        blockchainProvider: 'https://exchainrpc.okex.org'
     }
 };
 

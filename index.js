@@ -170,7 +170,7 @@ async function notifyStamina(accounts) {
         }
 
         embedMessage.setDescription(
-            `${baseMessage}${config.weaponIds && createEnemyMessagePart(character.enemy)}`
+            `${baseMessage}${config.weaponIds ? createEnemyMessagePart(character.enemy) : ''}`
         );
 
         await webhookClient.send({
@@ -190,10 +190,10 @@ async function notifyStamina(accounts) {
                     const baseMessage = `• ${ordinal(character.index)} (${character.stamina})`;
 
                     if (!character.thresholdReachedAt) {
-                        return `${baseMessage}${config.weaponIds && createEnemyMessagePart(character.enemy)}`;
+                        return `${baseMessage}${config.weaponIds ? createEnemyMessagePart(character.enemy) : ''}`;
                     }
 
-                    return `${baseMessage} - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}${config.weaponIds && createEnemyMessagePart(character.enemy)}`;
+                    return `${baseMessage} - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}${config.weaponIds ? createEnemyMessagePart(character.enemy) : ''}`;
                 })
                 .join('\n');
 

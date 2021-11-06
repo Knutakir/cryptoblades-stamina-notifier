@@ -1,4 +1,4 @@
-import {MessageEmbed, WebhookClient} from 'discord.js';
+import {Formatters, MessageEmbed, WebhookClient} from 'discord.js';
 import Web3 from 'web3';
 import ordinal from 'ordinal';
 // eslint-disable-next-line import/no-unresolved
@@ -113,11 +113,6 @@ function splitCharacterMessageDescriptions(accountStaminas) {
     return messageDescriptions;
 }
 
-function createDynamicDiscordTimestamp(date) {
-    const unixTime = Math.round(date.getTime() / 1000);
-    return `<t:${unixTime}:R>`;
-}
-
 function getDiscordEmojiFromTrait(trait) {
     switch (trait) {
         case 0:
@@ -165,7 +160,7 @@ async function notifyStamina(accounts) {
         if (!character.thresholdReachedAt) {
             baseMessage = `\`${account.name}\`'s ${ordinal(character.index)} character reached ${config.staminaThreshold} stamina (${character.stamina})`;
         } else {
-            const dynamicTimestamp = createDynamicDiscordTimestamp(character.thresholdReachedAt);
+            const dynamicTimestamp = Formatters.time(character.thresholdReachedAt, Formatters.TimestampStyles.RelativeTime);
             baseMessage = `\`${account.name}\`'s ${ordinal(character.index)} character reaches ${config.staminaThreshold} stamina (${character.stamina}) - ${dynamicTimestamp}`;
         }
 
@@ -193,7 +188,8 @@ async function notifyStamina(accounts) {
                         return `${baseMessage}${config.weaponIds ? createEnemyMessagePart(character.enemy) : ''}`;
                     }
 
-                    return `${baseMessage} - ${createDynamicDiscordTimestamp(character.thresholdReachedAt)}${config.weaponIds ? createEnemyMessagePart(character.enemy) : ''}`;
+                    const dynamicTimestamp = Formatters.time(character.thresholdReachedAt, Formatters.TimestampStyles.RelativeTime);
+                    return `${baseMessage} - ${dynamicTimestamp}${config.weaponIds ? createEnemyMessagePart(character.enemy) : ''}`;
                 })
                 .join('\n');
 

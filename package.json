@@ -1,6 +1,7 @@
 {
   "name": "cryptoblades-stamina-notifier",
   "version": "1.0.0",
+  "private": true,
   "description": "Get notified when stamina thresholds are reached for CryptoBlades characters",
   "main": "index.js",
   "scripts": {

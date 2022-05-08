@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Default is 60 minutes for the wait timeout
-const HOUR_IN_MILLESECONDS = 3600000;
+const HOUR_IN_MILLISECONDS = 3600000;
 
 const chains = {
     bsc: {
@@ -31,7 +31,7 @@ export default {
     discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || '',
     discordWebhookId: process.env.DISCORD_WEBHOOK_ID || '',
     discordWebhookToken: process.env.DISCORD_WEBHOOK_TOKEN || '',
-    waitTimeout: process.env.WAIT_TIMEOUT || HOUR_IN_MILLESECONDS,
+    waitTimeout: process.env.WAIT_TIMEOUT || HOUR_IN_MILLISECONDS,
     staminaThreshold: parseInt(process.env.STAMINA_THRESHOLD, 10) || 160,
     network: (Object.keys(chains).includes(process.env.NETWORK) && process.env.NETWORK) || 'bsc',
     blockchainProvider: process.env.BLOCKCHAIN_PROVIDER || getDefaultBlockchainProvider(process.env.NETWORK),

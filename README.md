@@ -1,4 +1,5 @@
 # cryptoblades-stamina-notifier
+
 > 🏃 Get notified when stamina thresholds are reached for [CryptoBlades](https://www.cryptoblades.io) characters
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/knutkirkhorn/cryptoblades-stamina-notifier)](https://hub.docker.com/r/knutkirkhorn/cryptoblades-stamina-notifier) [![Docker Image Size](https://badgen.net/docker/size/knutkirkhorn/cryptoblades-stamina-notifier)](https://hub.docker.com/r/knutkirkhorn/cryptoblades-stamina-notifier)
@@ -10,8 +11,11 @@ Notifies on Discord if stamina thresholds are reached for given [CryptoBlades](h
 </div>
 
 ## Usage
+
 ### Within a Docker container
+
 #### From Docker Hub Image
+
 This will pull the image from [Docker Hub](https://hub.docker.com/) and run the image with the provided configuration for web hooks as below. It's required to provide account addresses, names and the Webhook URL or both the Webhook ID and token.
 
 ```sh
@@ -29,6 +33,7 @@ $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
 ```
 
 #### From source code
+
 ```sh
 # Build container from source
 $ docker build -t cryptoblades-stamina-notifier .
@@ -47,6 +52,7 @@ $ docker run -d -e DISCORD_WEBHOOK_URL=<URL_HERE> \
 ```
 
 ### Outside of a Docker container
+
 ```sh
 # Install
 $ npm install
@@ -56,6 +62,7 @@ $ npm start
 ```
 
 ### Environment variables
+
 Provide these with the docker run command or store these in a `.env` file.
 
 - `DISCORD_WEBHOOK_URL`
@@ -94,6 +101,3 @@ Provide these with the docker run command or store these in a `.env` file.
 - `WEAPON_IDS` ***(optional)***
     - IDs for the weapons used for calculating win percentages for the different opponents.
     - Needs to be in the same order as the addresses.
-
-## License
-MIT © [Knut Kirkhorn](https://github.com/knutkirkhorn/cryptoblades-stamina-notifier/blob/main/LICENSE)
